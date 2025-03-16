@@ -105,15 +105,27 @@ int main(int argc, char *argv[]) {
   }
 
   for (auto &i : dialogs) {
-    // TODO: печать каждого диалога в отдельном файле с названием диалога
-    // print_dialog(i);
+    print_dialog(i);
   }
 
   file.close();
   return 0;
 }
 
-// void print_dialog(const Dialog &dialog) { cout << dialog.name << "\n"; }
+void print_dialog(const Dialog &dialog) {
+  std::cout << "========================" << std::endl;
+  std::cout << std::endl;
+  std::cout << dialog.name << std::endl;
+  std::cout << std::endl;
+  for (auto &i : dialog.messages) {
+    std::cout << i.display_name << std::endl;
+    std::cout << i.from << std::endl;
+    std::cout << i.content << std::endl;
+    std::cout << i.time << std::endl;
+    std::cout << std::endl;
+  }
+  std::cout << "========================" << std::endl;
+}
 
 int save_token(char *buffer, std::vector<Dialog> &dialogs, TypeKey key,
                AuthorsMap &authors) {
@@ -133,9 +145,9 @@ int save_token(char *buffer, std::vector<Dialog> &dialogs, TypeKey key,
     }
 
     case FROM:
-      if (dialogs.empty()) {
+      if (dialogs.empty() || dialogs.back().messages.empty()) {
         std::cout << "Can't save message: no dialog\n";
-        throw std::logic_error("Can't save message: no dialog");
+        throw std::range_error("Can't add new message");
       } else if (dname_msg.empty()) {
         std::cout << "Can't save message: no dialog name for author\n";
         throw std::logic_error("Can't save message: no dialog name for author");
@@ -150,10 +162,16 @@ int save_token(char *buffer, std::vector<Dialog> &dialogs, TypeKey key,
       break;
 
     case TIME:
+      if (dialogs.empty() || dialogs.back().messages.empty()) {
+        throw std::range_error("Can't add new message");
+      }
       dialogs.back().messages.back().time = std::string(buffer);
       break;
 
     case CONTENT:
+      if (dialogs.empty() || dialogs.back().messages.empty()) {
+        throw std::range_error("Can't add new message");
+      }
       dialogs.back().messages.back().content = std::string(buffer);
       break;
   }
