@@ -105,16 +105,28 @@ int main(void) {
   }
 
   for (auto &i : dialogs) {
-    // TODO: печать каждого диалога в отдельном файле
     print_dialog(i);
   }
 
   return 0;
 }
 
-// void print_dialog(const Dialog &dialog) { cout << dialog.name << "\n"; }
+void print_dialog(const Dialog &dialog) {
+  std::cout << "========================" << std::endl;
+  std::cout << std::endl;
+  std::cout << dialog.name << std::endl;
+  std::cout << std::endl;
+  for (auto &i : dialog.messages) {
+    std::cout << i.display_name << std::endl;
+    std::cout << i.from << std::endl;
+    std::cout << i.content << std::endl;
+    std::cout << i.time << std::endl;
+    std::cout << std::endl;
+  }
+  std::cout << "========================" << std::endl;
+}
 
-int save_token(char *buffer, std::vector<Dialog> &dialogs, Key key) {
+int save_token(char *buffer, std::vector<Dialog> &dialogs, TypeKey key) {
   switch (key) {
     case DNAME_CONV: {
       Dialog temp = {};
@@ -131,14 +143,23 @@ int save_token(char *buffer, std::vector<Dialog> &dialogs, Key key) {
     }
 
     case FROM:
+      if (dialogs.empty() || dialogs.back().messages.empty()) {
+        throw std::range_error("Can't add new message");
+      }
       dialogs.back().messages.back().from = std::string(buffer);
       break;
 
     case TIME:
+      if (dialogs.empty() || dialogs.back().messages.empty()) {
+        throw std::range_error("Can't add new message");
+      }
       dialogs.back().messages.back().time = std::string(buffer);
       break;
 
     case CONTENT:
+      if (dialogs.empty() || dialogs.back().messages.empty()) {
+        throw std::range_error("Can't add new message");
+      }
       dialogs.back().messages.back().content = std::string(buffer);
       break;
   }
