@@ -79,23 +79,19 @@ int main(void) {
         char prev_symbol = '\0';
         len_buffer = 0;  // переиспользуем буффер
 
+        if (typekey == TIME) {
+          save_token(buffer, dialogs, typekey);
+        }
+
         // пока не встретим '"', который не экранируется или ',' или конец
            while((symbol = getchar()) != EOF && !(symbol == border_symbol && prev_symbol == '\'))) {
                buffer[len_buffer++] = symbol;
                prev_symbol = symbol;
       }
+      if (typekey != DIALOG_DNAME) {
+        save_token(buffer, dialogs, key);
+      }
     }
-    //
-    //    вот тут надо понять и как-то закинуть получившееся значение
-    //    в хеш-таблицу, просто там сейчас я указал хранится указатель
-    //    на строку а может все таки просто строку которую тут вот получили
-    //    копировать из буффера в хеш-таблицу под соответствующий ключ
-    //    ключ - то есть под какое поле класть в структуру message мы
-    //    определяем по значению enum из хеш таблицы
-    //
-    //    вообще лучше отдельную функцию по добавлению
-    //    save_token(buffer, dialogs, key);
-    // }
   }
   len_buffer = 0;
 }
