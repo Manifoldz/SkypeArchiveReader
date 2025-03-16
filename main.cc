@@ -21,12 +21,12 @@ typedef struct Dialog {
   std::vector<Message> messages;
 };
 
-enum TypeKey { DIALOG_DNAME, MSG_DNAME, FROM, TIME, CONTENT };
+enum TypeKey { DNAME_CONV, DNAME_MSG, FROM, TIME, CONTENT };
 
 int main(void) {
   // Хеш-таблица уникальных названий ключей в json, которые нас интересуют
   std::unordered_map<std::string, TypeKey> allowed_keys = {
-      {"displayName", DIALOG_DNAME},
+      {"displayName", DNAME_CONV},
       {"from", FROM},
       {"originalarrivaltime", TIME},
       {"content", CONTENT}};
@@ -44,6 +44,7 @@ int main(void) {
 
   char symbol = '\0';
   int len_buffer = 0;
+  bool is_last_dname = false;
 
   // TODO: открыть файл
 
@@ -80,48 +81,65 @@ int main(void) {
         len_buffer = 0;  // переиспользуем буффер
 
         if (typekey == TIME) {
-          save_token(buffer, dialogs, typekey);
+          save_token(buffer, dialogs, DNAME_MSG);
+        } else if (is_last_dname) {
+          save_token(buffer, dialogs, DNAME_CONV);
+          is_last_dname = false;
         }
 
         // пока не встретим '"', который не экранируется или ',' или конец
-           while((symbol = getchar()) != EOF && !(symbol == border_symbol && prev_symbol == '\'))) {
-               buffer[len_buffer++] = symbol;
-               prev_symbol = symbol;
-      }
-      if (typekey != DIALOG_DNAME) {
-        save_token(buffer, dialogs, key);
+        while ((symbol = getchar()) != EOF &&
+               !(symbol == border_symbol && prev_symbol == '\\')) {
+          buffer[len_buffer++] = symbol;
+          prev_symbol = symbol;
+        }
+
+        if (typekey != DNAME_CONV) {
+          save_token(buffer, dialogs, typekey);
+        } else {
+          is_last_dname = true;
+        }
       }
     }
+    len_buffer = 0;
   }
-  len_buffer = 0;
+
+  for (auto &i : dialogs) {
+    // TODO: печать каждого диалога в отдельном файле
+    print_dialog(i);
+  }
+
+  return 0;
 }
 
-//   for (по количеству диалогов в dialogs) {
-//     // TODO: печать каждого диалога в отдельном файле
-//     print_dialog();
-//   }
-
-return 0;
-}
+// void print_dialog(const Dialog &dialog) { cout << dialog.name << "\n"; }
 
 int save_token(char *buffer, std::vector<Dialog> &dialogs, Key key) {
-  static bool is_dialog_name = true;
   switch (key) {
-    case DISPLAY_NAME:
-      if (is_dialog_name) {
-        // добавляем диалог в вектор диалогов и ставим ему имя из буффера
-        is_dialog_name = false;
-      } else {
-        // добавляем сообщение в вектор сообщений у диалога последнего и
-        // ставим ему имя из буффера
-        is_dialog_name = true;  // TODO неправильно!!!
-      }
+    case DNAME_CONV: {
+      Dialog temp = {};
+      temp.name = std::string(buffer);
+      dialogs.push_back(temp);
       break;
+    }
+
+    case DNAME_MSG: {
+      Message name = {};
+      name.display_name = std::string(buffer);
+      dialogs.back().messages.push_back(name);
+      break;
+    }
 
     case FROM:
-      // кладем в последнее сообщение последнего диалога в поле from значение
-      // из буффера
+      dialogs.back().messages.back().from = std::string(buffer);
       break;
-      // ...
+
+    case TIME:
+      dialogs.back().messages.back().time = std::string(buffer);
+      break;
+
+    case CONTENT:
+      dialogs.back().messages.back().content = std::string(buffer);
+      break;
   }
 }
