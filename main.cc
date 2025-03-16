@@ -1,17 +1,15 @@
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
-// hu
-//  допустим у нас отображаемое имя автора не больше 100 символов
-#define MAX_DNAME_SIZE 100
-// допустим у нас контент не больше 10000 символов TODO: это надо выяснить макс
-// длину сообщения в скайпе
+
+// TODO:  надо выяснить макс длину сообщений в скайпе
 #define MAX_BUF_SIZE 10000
 
 typedef struct Message {
-  std::string display_name;
-  std::string from;
+  const std::string *display_name;
+  const std::string *from;
   std::string time;
   std::string content;
 };
@@ -23,79 +21,81 @@ typedef struct Dialog {
 
 enum TypeKey { DNAME_CONV, DNAME_MSG, FROM, TIME, CONTENT };
 
-int main(void) {
-  // Хеш-таблица уникальных названий ключей в json, которые нас интересуют
+using AuthorsMap = std::unordered_map<std::string, std::string>;
+
+int main(int argc, char *argv[]) {
+  if (argc != 2) {
+    std::cout << "Usage: skareader <messages.json>\n";
+    return 1;
+  }
+
+  std::ifstream file(argv[1]);
+  if (!file.is_open()) {
+    std::cout << "Can't open file " << argv[1] << "\n";
+    return 1;
+  }
+
   std::unordered_map<std::string, TypeKey> allowed_keys = {
       {"displayName", DNAME_CONV},
       {"from", FROM},
       {"originalarrivaltime", TIME},
       {"content", CONTENT}};
 
-  // Хеш-таблица уникальных авторов, ключ это "from", а значение "displayName"
-  std::unordered_map<std::string, std::string> authors;
-
-  // Все диалоги
+  AuthorsMap authors;
   std::vector<Dialog> dialogs;
-
-  // Выделяем буффер под ключи сообщений - отсюда будем сверять их
-  // с строками в allowed_keys. Также этот же буффер используется для значений
-  // TODO: надо выяснить макс длину в скайпе
   char buffer[MAX_BUF_SIZE + 1] = {'\0'};
+  int len_buffer = 0;
 
   char symbol = '\0';
-  int len_buffer = 0;
   bool is_last_dname = false;
 
-  // TODO: открыть файл
-
-  // вместо getchar взять аналог в с++
-  while ((symbol = getchar()) != EOF) {
-    // встречаем начало ключа
+  // TODO: need try catch
+  while ((symbol = file.get()) != EOF) {
     if (symbol == '"') {
-      // перекладываем в буффер символы, пока там есть место и не встретим
-      // закрывающие кавычки или конец файла
-      while (len_buffer < MAX_BUF_SIZE && (symbol = getchar()) != '"' &&
+      // fill buffer by key
+      while (len_buffer < MAX_BUF_SIZE && (symbol = file.get()) != '"' &&
              symbol != EOF) {
         buffer[len_buffer++] = symbol;
       }
       buffer[len_buffer] = '\0';
 
-      // проверяем ключ на наличие в списке ключей которые нас интересуют
+      // check if key in buffer is interesting
       auto iter = allowed_keys.find(std::string(buffer));
       if (iter != allowed_keys.end()) {
-        // сохраняем какой это ключ из enum
         TypeKey typekey = iter->second;
 
-        // выходим если не двоеточие
-        if (getchar() != ':') {
-          std::cout << "Wrong char after key:" << buffer << "\n";
-          return 1;
+        if (file.get() != ':') {
+          std::cout << "Wrong char after key:" << buffer << " (expected ':')\n";
+          throw std::logic_error("Wrong char after key");
         }
-
-        char border_symbol = '"';  // до какого символа читаем значение
-        if ((symbol = getchar()) == 'n') {
-          border_symbol = ',';
-        }
-
-        char prev_symbol = '\0';
-        len_buffer = 0;  // переиспользуем буффер
 
         if (typekey == TIME) {
-          save_token(buffer, dialogs, DNAME_MSG);
+          save_token(buffer, dialogs, DNAME_MSG, authors);
         } else if (is_last_dname) {
-          save_token(buffer, dialogs, DNAME_CONV);
+          save_token(buffer, dialogs, DNAME_CONV, authors);
           is_last_dname = false;
         }
 
-        // пока не встретим '"', который не экранируется или ',' или конец
-        while ((symbol = getchar()) != EOF &&
-               !(symbol == border_symbol && prev_symbol == '\\')) {
+        // overwrite the same buffer, prepare for value
+        len_buffer = 0;
+        char border_symbol = '"';
+
+        char prev_symbol = '\0';
+        // null case in value
+        if ((symbol = getchar()) == 'n') {
+          border_symbol = ',';
+          buffer[len_buffer++] = symbol;
+        }
+
+        while ((symbol = file.get()) != EOF &&
+               !(symbol == border_symbol &&
+                 prev_symbol == '\\')) {  // TODO: нужно еще null обрабатывать
           buffer[len_buffer++] = symbol;
           prev_symbol = symbol;
         }
 
         if (typekey != DNAME_CONV) {
-          save_token(buffer, dialogs, typekey);
+          save_token(buffer, dialogs, typekey, authors);
         } else {
           is_last_dname = true;
         }
@@ -105,16 +105,20 @@ int main(void) {
   }
 
   for (auto &i : dialogs) {
-    // TODO: печать каждого диалога в отдельном файле
-    print_dialog(i);
+    // TODO: печать каждого диалога в отдельном файле с названием диалога
+    // print_dialog(i);
   }
 
+  file.close();
   return 0;
 }
 
 // void print_dialog(const Dialog &dialog) { cout << dialog.name << "\n"; }
 
-int save_token(char *buffer, std::vector<Dialog> &dialogs, Key key) {
+int save_token(char *buffer, std::vector<Dialog> &dialogs, TypeKey key,
+               AuthorsMap &authors) {
+  static std::string dname_msg;
+
   switch (key) {
     case DNAME_CONV: {
       Dialog temp = {};
@@ -124,14 +128,25 @@ int save_token(char *buffer, std::vector<Dialog> &dialogs, Key key) {
     }
 
     case DNAME_MSG: {
-      Message name = {};
-      name.display_name = std::string(buffer);
-      dialogs.back().messages.push_back(name);
+      dname_msg = std::string(buffer);
       break;
     }
 
     case FROM:
-      dialogs.back().messages.back().from = std::string(buffer);
+      if (dialogs.empty()) {
+        std::cout << "Can't save message: no dialog\n";
+        throw std::logic_error("Can't save message: no dialog");
+      } else if (dname_msg.empty()) {
+        std::cout << "Can't save message: no dialog name for author\n";
+        throw std::logic_error("Can't save message: no dialog name for author");
+      }
+
+      auto [iter, inserted] = authors.insert({std::string(buffer), dname_msg});
+      if (inserted) {
+        dname_msg.clear();
+      }
+      dialogs.back().messages.back().from = &iter->first;
+      dialogs.back().messages.back().display_name = &iter->second;
       break;
 
     case TIME:
